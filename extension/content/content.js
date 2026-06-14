@@ -164,7 +164,17 @@ function createFloatingButton() {
     if (STATE.panelOpen) {
       closePanel();
     } else {
-      analyze();
+      // 检查后台预分析是否已完成
+      const content = extractEmailContent();
+      if (content && STATE._lastAnalyzedHash === hashContent(content) && STATE.lastResult) {
+        // 后台已分析完 → 秒开
+        console.log('[智能邮件助手] 使用后台预分析结果');
+        openPanel();
+        showPanelState('result');
+        renderResult(STATE.lastResult);
+      } else {
+        analyze();
+      }
     }
   });
 
@@ -177,6 +187,18 @@ function updateButtonVisibility() {
   const hasEmail = detectEmailOpen();
   if (hasEmail) {
     btn.style.display = 'flex';
+    // 后台预分析: 检测到新邮件立即调 AI，用户点按钮时秒开
+    if (!STATE.loading && STATE.apiKey) {
+      const content = extractEmailContent();
+      if (content && content.length > 50) {
+        const h = hashContent(content);
+        if (h !== STATE._lastAnalyzedHash) {
+          STATE._lastAnalyzedHash = h;
+          console.log('[智能邮件助手] 检测到新邮件，后台预分析...');
+          analyze(true); // silent mode
+        }
+      }
+    }
   } else {
     btn.style.display = 'none';
     // 离开邮件时自动关闭面板
@@ -487,17 +509,17 @@ function normalizeAIResult(parsed, rawContent) {
 }
 
 // ========== 分析流程 ==========
-async function analyze() {
+async function analyze(silent) {
   if (STATE.loading) return;
 
   const emailContent = extractEmailContent();
   if (!emailContent || emailContent.length < 50) {
-    showToast('未检测到邮件内容，请确保已打开一封邮件');
+    if (!silent) showToast('未检测到邮件内容，请确保已打开一封邮件');
     return;
   }
 
   if (!STATE.apiKey) {
-    showToast('请先点击浏览器工具栏的扩展图标配置 API Key');
+    if (!silent) showToast('请先点击浏览器工具栏的扩展图标配置 API Key');
     return;
   }
 
@@ -511,8 +533,11 @@ async function analyze() {
     ? emailContent.substring(0, 2500) + '...[截断]'
     : emailContent;
   STATE.loading = true;
-  openPanel();
-  showPanelState('loading');
+
+  if (!silent) {
+    openPanel();
+    showPanelState('loading');
+  }
 
   // 检查缓存（相同邮件+链接+兴趣 = 相同结果）
   const cacheKey = hashContent(emailContent + '|links|' + JSON.stringify(links) + '|int|' + STATE.interests.join(','));
@@ -522,8 +547,10 @@ async function analyze() {
     // 状态需要实时计算 (缓存可能是昨天的)
     postProcessAllStatuses(cached);
     STATE.lastResult = cached;
-    renderResult(cached);
-    showPanelState('result');
+    if (!silent) {
+      renderResult(cached);
+      showPanelState('result');
+    }
     STATE.loading = false;
     return;
   }
@@ -537,19 +564,23 @@ async function analyze() {
     postProcessAllStatuses(result);
     STATE._cache.set(cacheKey, result); // 存入缓存
     STATE.lastResult = result;
-    renderResult(result);
-    showPanelState('result');
+    if (!silent) {
+      renderResult(result);
+      showPanelState('result');
+    } else {
+      console.log('[智能邮件助手] 后台分析完成，结果已缓存');
+    }
   } catch (error) {
     console.error('[智能邮件助手] 失败:', error);
-    // 显示详细错误信息
-    const errDiv = document.getElementById('ai-error-msg');
-    errDiv.innerHTML = `<strong>${esc(error.message || '分析失败')}</strong>`;
-    // 尝试显示原始响应用于调试
-    if (STATE._lastRawResponse) {
-      const details = document.getElementById('ai-error-detail');
-      if (details) details.textContent = STATE._lastRawResponse.substring(0, 500);
+    if (!silent) {
+      const errDiv = document.getElementById('ai-error-msg');
+      errDiv.innerHTML = `<strong>${esc(error.message || '分析失败')}</strong>`;
+      if (STATE._lastRawResponse) {
+        const details = document.getElementById('ai-error-detail');
+        if (details) details.textContent = STATE._lastRawResponse.substring(0, 500);
+      }
+      showPanelState('error');
     }
-    showPanelState('error');
   } finally {
     STATE.loading = false;
   }
