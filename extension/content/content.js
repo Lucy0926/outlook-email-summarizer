@@ -25,9 +25,11 @@ const SYSTEM_PROMPT = `⚠️ 重要指令: 你必须只使用简体中文输出
 
 你是一个手机通知摘要助手，把邮件内容变成推送卡片式的简短摘要。
 
-你的任务:
-1. 根据用户的"兴趣标签"，从邮件中精准匹配相关内容，给出极简摘要。
-2. 不匹配的内容用一句话带过。
+你的任务 (严格按顺序执行):
+1. 先从邮件中提取出所有新闻条目 —— 这一步与"兴趣标签"无关，无论标签是什么，提取出的新闻条目总数必须是固定的。
+2. 然后逐一判断每条新闻是否匹配用户的"兴趣标签"。
+3. 匹配的放入 "highlights"，不匹配的放入 "other"。
+4. "highlights" + "other" 的总条数必须等于邮件中的全部新闻条数，这个总数不受兴趣标签影响。
 
 风格要求 (重要):
 - 像手机推送通知一样简短——看得快，不用思考。
@@ -38,8 +40,8 @@ const SYSTEM_PROMPT = `⚠️ 重要指令: 你必须只使用简体中文输出
 
 格式要求:
 - 严格返回 JSON，不要 markdown 代码块。
-- "highlights" 放匹配用户兴趣的内容，"other" 放其他。
-- 没有匹配的内容时 highlights 为空数组。
+- "highlights" 放匹配用户兴趣的内容，"other" 放所有不匹配的内容（必须包含邮件中除 highlights 以外的全部新闻）。
+- 没有匹配的内容时 highlights 为空数组，"other" 包含全部新闻。
 - 每项必须是对象，包含如下字段。
 - 如果邮件只有1-2条主要内容，highlights和other加起来不要超过6条。
 - 同类或重复内容合并为一条，不要拆分。
@@ -503,7 +505,7 @@ function renderResult(result) {
   const { highlights = [], other = [] } = result;
   let html = '';
 
-  html += '<div class="ai-section-title hl">⭐ 你想看的</div>';
+  html += '<div class="ai-section-title hl">⭐ 我想看的</div>';
   if (highlights.length === 0) {
     html += '<div class="ai-empty">📭 没有匹配兴趣的内容</div>';
   } else {
@@ -527,16 +529,15 @@ function renderResult(result) {
     });
   }
 
-  // (📋 其他更新 已移除)
-  const allItems = [...highlights, ...other];
-  if (allItems.length > 0) {
+  // (其他新闻 — 只展示不在"我想看的"中的内容)
+  if (other.length > 0) {
     html += '<div class="ai-allnews-section">';
     html += '<div class="ai-allnews-header" id="ai-allnews-toggle">';
-    html += `<span>📰 全部新闻 (${allItems.length}条)</span>`;
+    html += `<span>📰 其他新闻 (${other.length}条)</span>`;
     html += '<span class="arrow">▶</span>';
     html += '</div>';
     html += '<div class="ai-allnews-body" id="ai-allnews-body">';
-    allItems.forEach(item => {
+    other.forEach(item => {
       const hasUrl = !!(item.url && item.url.trim());
       const line = item.title
         ? `<strong>${esc(item.title)}</strong> · ${esc(item.oneLiner || item.summary || '')}`
@@ -572,14 +573,14 @@ function renderResult(result) {
 function copyResult() {
   if (!STATE.lastResult) return;
   const { highlights, other } = STATE.lastResult;
-  let text = '📧 智能邮件摘要\n' + '='.repeat(30) + '\n\n⭐ 你想看的\n';
+  let text = '📧 智能邮件摘要\n' + '='.repeat(30) + '\n\n⭐ 我想看的\n';
   highlights.forEach((h, i) => {
     text += `${i + 1}. ${h.title || ''}\n   ${h.summary || ''}\n`;
     if (h.matchedInterest) text += `   🏷️ ${h.matchedInterest}\n`;
     if (h.url) text += `   🔗 ${h.url}\n`;
   });
   if (other.length > 0) {
-    text += '\n📋 其他\n';
+    text += '\n📋 其他新闻\n';
     other.forEach(o => {
       text += `• ${o.title || o.oneLiner || o.summary || ''}`;
       if (o.url) text += ` — ${o.url}`;
