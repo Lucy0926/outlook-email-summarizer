@@ -77,7 +77,15 @@ function listenForStorageChanges() {
   chrome.storage.onChanged.addListener((changes) => {
     if (changes.api_key) STATE.apiKey = changes.api_key.newValue || '';
     if (changes.api_endpoint) STATE.apiEndpoint = changes.api_endpoint.newValue || DEFAULTS.API_ENDPOINT;
-    if (changes.interests) STATE.interests = changes.interests.newValue || DEFAULTS.INTERESTS;
+    if (changes.interests) {
+      STATE.interests = changes.interests.newValue || DEFAULTS.INTERESTS;
+      // 兴趣标签变更 → 自动重新分析
+      if (STATE.panelOpen && STATE.currentEmailContent && !STATE.loading) {
+        console.log('[智能邮件助手] 兴趣标签已变更，自动刷新');
+        analyze();
+        return;
+      }
+    }
     checkAndInjectButton();
   });
 }
@@ -239,6 +247,42 @@ function extractEmailLinks() {
   return links;
 }
 
+function matchLinksToItems(items, links) {
+  if (!links || links.length === 0) return;
+  items.forEach(item => {
+    // 如果 AI 已经给了 URL，跳过
+    if (item.url && item.url.trim()) return;
+
+    // 用标题/摘要去匹配链接文字
+    const searchText = (item.title + ' ' + (item.summary || item.oneLiner || '')).toLowerCase();
+    let bestScore = 0;
+    let bestUrl = '';
+
+    links.forEach(link => {
+      const linkText = link.text.toLowerCase();
+      // 完全包含
+      if (linkText.includes(searchText.substring(0, 8)) || searchText.includes(linkText.substring(0, 8))) {
+        if (linkText.length > bestScore) {
+          bestScore = linkText.length;
+          bestUrl = link.href;
+        }
+      }
+      // 逐词匹配
+      const words = searchText.split(/\s+/).filter(w => w.length >= 2);
+      const matchCount = words.filter(w => linkText.includes(w)).length;
+      if (matchCount >= 2 && matchCount / words.length > 0.4 && linkText.length > bestScore) {
+        bestScore = linkText.length;
+        bestUrl = link.href;
+      }
+    });
+
+    if (bestUrl) {
+      item.url = bestUrl;
+      console.log('[智能邮件助手] 自动匹配链接:', item.title, '→', bestUrl.substring(0, 60));
+    }
+  });
+}
+
 function cleanText(text) {
   if (!text) return '';
   return text
@@ -382,8 +426,8 @@ async function analyze() {
   openPanel();
   showPanelState('loading');
 
-  // 检查缓存（相同邮件内容+链接 = 相同结果）
-  const cacheKey = hashContent(emailContent + '|links|' + JSON.stringify(links));
+  // 检查缓存（相同邮件+链接+兴趣 = 相同结果）
+  const cacheKey = hashContent(emailContent + '|links|' + JSON.stringify(links) + '|int|' + STATE.interests.join(','));
   if (STATE._cache.has(cacheKey)) {
     console.log('[智能邮件助手] 命中缓存');
     const cached = STATE._cache.get(cacheKey);
@@ -396,6 +440,9 @@ async function analyze() {
 
   try {
     const result = await callAI(emailContent, links);
+    // 后处理: AI 没填的链接从邮件 DOM 自动匹配
+    matchLinksToItems(result.highlights, links);
+    matchLinksToItems(result.other, links);
     STATE._cache.set(cacheKey, result); // 存入缓存
     STATE.lastResult = result;
     renderResult(result);
@@ -456,7 +503,7 @@ function renderResult(result) {
   const { highlights = [], other = [] } = result;
   let html = '';
 
-  html += '<div class="ai-section-title hl">⭐ 重点关注</div>';
+  html += '<div class="ai-section-title hl">⭐ 你想看的</div>';
   if (highlights.length === 0) {
     html += '<div class="ai-empty">📭 没有匹配兴趣的内容</div>';
   } else {
@@ -525,7 +572,7 @@ function renderResult(result) {
 function copyResult() {
   if (!STATE.lastResult) return;
   const { highlights, other } = STATE.lastResult;
-  let text = '📧 智能邮件摘要\n' + '='.repeat(30) + '\n\n⭐ 重点关注\n';
+  let text = '📧 智能邮件摘要\n' + '='.repeat(30) + '\n\n⭐ 你想看的\n';
   highlights.forEach((h, i) => {
     text += `${i + 1}. ${h.title || ''}\n   ${h.summary || ''}\n`;
     if (h.matchedInterest) text += `   🏷️ ${h.matchedInterest}\n`;
