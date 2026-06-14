@@ -85,7 +85,7 @@ JSON 示例:
   "other": [
     { "title": "图书馆闭馆", "oneLiner": "6月15日-16日闭馆，地点: 主图书馆", "url": "https://...", "status": "", "deadline": "", "location": "主图书馆" }
   ]
-}``;
+}`;
 
 // ========== 初始化 ==========
 (function init() {
