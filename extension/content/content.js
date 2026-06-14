@@ -18,6 +18,7 @@ const STATE = {
   apiKey: '',
   apiEndpoint: DEFAULTS.API_ENDPOINT,
   _cache: new Map(),  // 邮件内容 hash → 结果缓存
+  _renderOnComplete: false,  // 用户已打开面板等待后台结果
 };
 
 // ========== System Prompt ==========
@@ -164,7 +165,6 @@ function createFloatingButton() {
     if (STATE.panelOpen) {
       closePanel();
     } else {
-      // 检查后台预分析是否已完成
       const content = extractEmailContent();
       if (content && STATE._lastAnalyzedHash === hashContent(content) && STATE.lastResult) {
         // 后台已分析完 → 秒开
@@ -172,6 +172,12 @@ function createFloatingButton() {
         openPanel();
         showPanelState('result');
         renderResult(STATE.lastResult);
+      } else if (STATE.loading) {
+        // 后台正在分析中 → 打开面板显示 loading，完成后自动渲染
+        console.log('[智能邮件助手] 后台分析进行中，等待完成...');
+        openPanel();
+        showPanelState('loading');
+        STATE._renderOnComplete = true;
       } else {
         analyze();
       }
@@ -547,9 +553,11 @@ async function analyze(silent) {
     // 状态需要实时计算 (缓存可能是昨天的)
     postProcessAllStatuses(cached);
     STATE.lastResult = cached;
-    if (!silent) {
+    if (!silent || STATE._renderOnComplete) {
+      if (!STATE.panelOpen) openPanel();
       renderResult(cached);
       showPanelState('result');
+      STATE._renderOnComplete = false;
     }
     STATE.loading = false;
     return;
@@ -564,15 +572,18 @@ async function analyze(silent) {
     postProcessAllStatuses(result);
     STATE._cache.set(cacheKey, result); // 存入缓存
     STATE.lastResult = result;
-    if (!silent) {
+    if (!silent || STATE._renderOnComplete) {
+      if (!STATE.panelOpen) openPanel();
       renderResult(result);
       showPanelState('result');
+      STATE._renderOnComplete = false;
     } else {
       console.log('[智能邮件助手] 后台分析完成，结果已缓存');
     }
   } catch (error) {
     console.error('[智能邮件助手] 失败:', error);
-    if (!silent) {
+    if (!silent || STATE._renderOnComplete) {
+      if (!STATE.panelOpen) openPanel();
       const errDiv = document.getElementById('ai-error-msg');
       errDiv.innerHTML = `<strong>${esc(error.message || '分析失败')}</strong>`;
       if (STATE._lastRawResponse) {
@@ -580,6 +591,7 @@ async function analyze(silent) {
         if (details) details.textContent = STATE._lastRawResponse.substring(0, 500);
       }
       showPanelState('error');
+      STATE._renderOnComplete = false;
     }
   } finally {
     STATE.loading = false;
@@ -599,6 +611,7 @@ function openPanel() {
 
 function closePanel() {
   STATE.panelOpen = false;
+  STATE._renderOnComplete = false;  // 用户手动关闭，取消等待
   document.getElementById('ai-summarizer-panel').classList.remove('open');
   document.getElementById('ai-overlay').classList.remove('show');
   // 恢复浮动按钮
