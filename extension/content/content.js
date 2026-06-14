@@ -402,7 +402,7 @@ async function callAI(emailContent, links) {
           { role: 'user', content: userMessage },
         ],
         temperature: 0,
-        max_tokens: 1200,
+        max_tokens: 2000,
       }),
       signal: controller.signal,
     });
