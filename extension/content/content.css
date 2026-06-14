@@ -172,6 +172,34 @@
   font-weight: 500;
 }
 
+/* 状态徽章 */
+.ai-status-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+  font-weight: 500;
+}
+.ai-status-已结束 { background: #f0f0f0; color: #999; }
+.ai-status-进行中 { background: #e6f7e6; color: #2b8a2b; }
+.ai-status-即将截止 { background: #fff3e0; color: #e8830c; }
+
+/* 额外信息行 */
+.ai-card-meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #888;
+}
+.ai-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 /* 其他列表 */
 .ai-other-list {
   list-style: none;

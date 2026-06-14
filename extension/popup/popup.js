@@ -20,6 +20,8 @@ const STORAGE_KEYS = {
 
 // ========== 状态 ==========
 let interests = [...DEFAULTS.INTERESTS];
+let savedInterests = [...DEFAULTS.INTERESTS];  // 上次保存的标签快照
+let isDirty = false;
 
 // ========== 初始化 ==========
 document.addEventListener('DOMContentLoaded', async () => {
@@ -46,6 +48,7 @@ async function loadSettings() {
     }
     if (result[STORAGE_KEYS.INTERESTS] && Array.isArray(result[STORAGE_KEYS.INTERESTS])) {
       interests = [...result[STORAGE_KEYS.INTERESTS]];
+      savedInterests = [...result[STORAGE_KEYS.INTERESTS]];
     }
   } catch (e) { /* ignore */ }
 }
@@ -70,6 +73,7 @@ function renderInterests() {
   container.querySelectorAll('.chip-remove').forEach(el => {
     el.addEventListener('click', () => {
       interests.splice(parseInt(el.dataset.index), 1);
+      markDirty();
       renderInterests();
       renderSuggestions();
     });
@@ -83,6 +87,7 @@ function addTag() {
   if (interests.includes(tag)) { showToast('标签已存在'); return; }
   if (interests.length >= 10) { showToast('最多 10 个'); return; }
   interests.push(tag);
+  markDirty();
   input.value = '';
   renderInterests();
   renderSuggestions();
@@ -99,6 +104,7 @@ function renderSuggestions() {
       const tag = el.textContent.trim();
       if (!interests.includes(tag) && interests.length < 10) {
         interests.push(tag);
+        markDirty();
         renderInterests();
         renderSuggestions();
       }
@@ -118,11 +124,51 @@ async function saveSettings() {
       [STORAGE_KEYS.API_ENDPOINT]: endpoint || DEFAULTS.API_ENDPOINT,
       [STORAGE_KEYS.INTERESTS]: interests,
     });
+    savedInterests = [...interests];
+    isDirty = false;
+    updateSaveButton();
     showToast('设置已保存 ✓');
   } catch (e) {
     showToast('保存失败: ' + e.message);
   }
 }
+
+// ========== 未保存提醒 ==========
+function markDirty() {
+  if (!isDirty) {
+    isDirty = true;
+    updateSaveButton();
+  }
+}
+
+function updateSaveButton() {
+  const btn = document.getElementById('btn-save');
+  if (!btn) return;
+  if (isDirty) {
+    btn.textContent = '⚠️ 保存设置 (有未保存的更改)';
+    btn.style.background = '#e8830c';
+  } else {
+    btn.textContent = '💾 保存设置';
+    btn.style.background = '';
+  }
+}
+
+// 弹窗失去焦点时提醒（用户点击外部关闭弹窗）
+window.addEventListener('blur', () => {
+  if (isDirty) {
+    // 弹窗即将关闭，自动保存标签变更
+    // （API Key 不变，只保存标签）
+    chrome.storage.local.get(['api_key', 'api_endpoint'], async (result) => {
+      await chrome.storage.local.set({
+        [STORAGE_KEYS.API_KEY]: result.api_key || '',
+        [STORAGE_KEYS.API_ENDPOINT]: result.api_endpoint || DEFAULTS.API_ENDPOINT,
+        [STORAGE_KEYS.INTERESTS]: interests,
+      });
+    });
+    isDirty = false;
+    console.log('[智能邮件助手] 弹窗关闭，自动保存标签');
+  }
+});
 
 // ========== 工具 ==========
 function showToast(msg) {

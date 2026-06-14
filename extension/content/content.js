@@ -27,14 +27,33 @@ const SYSTEM_PROMPT = `⚠️ 重要指令: 你必须只使用简体中文输出
 
 你的任务 (严格按顺序执行):
 1. 先从邮件中提取出所有新闻条目 —— 这一步与"兴趣标签"无关，无论标签是什么，提取出的新闻条目总数必须是固定的。
-2. 然后逐一判断每条新闻是否匹配用户的"兴趣标签"。
+2. 再逐一判断每条新闻是否匹配用户的"兴趣标签"。
 3. 匹配的放入 "highlights"，不匹配的放入 "other"。
 4. "highlights" + "other" 的总条数必须等于邮件中的全部新闻条数，这个总数不受兴趣标签影响。
+
+匹配规则 (极其重要):
+- 不仅要看标签关键词是否在新闻中出现，还要检查新闻的限定条件。
+- 例: 用户标签是"内地生实习"，但新闻明确写"仅限澳门本地学生"或"只对澳门居民开放"，则这条新闻不应匹配该标签。
+- 例: 用户标签是"本科生奖学金"，但新闻写"仅面向研究生"，则不应匹配。
+- 如果新闻有条件限制但与用户标签不冲突，则可以匹配。
+- 如果不确定是否匹配，倾向于不匹配（放入 other）。
+
+状态标记 (重要):
+- 对于活动/讲座/比赛等有时间性的新闻，必须判断其状态:
+  - 如果报名/活动截止日期已过 → 在 summary 末尾加 【已结束】
+  - 如果活动正在进行中(开始但未结束) → 在 summary 末尾加 【进行中】
+  - 如果截止日期在7天内 → 在 summary 末尾加 【即将截止】
+  - 使用今天的日期来判断。
+
+关键信息提取 (重要):
+- 有报名截止时间的，必须在 summary 中写明"截止: X月X日"
+- 有活动地点的，必须在 summary 中写明"地点: XXX"
+- 有报名链接的，必须用原文链接填入 url 字段
 
 风格要求 (重要):
 - 像手机推送通知一样简短——看得快，不用思考。
 - 只输出简体中文（禁止繁体字）。英文术语保留原文并用括号标注。
-- 每条 title 不超过 12 个字，summary/oneLiner 不超过 30 个字。
+- 每条 title 不超过 12 个字，summary/oneLiner 不超过 40 个字（因为要包含时间和地点）。
 - 只说核心信息，去掉"本次""欢迎大家""敬请期待"等废话。
 - 日期、截止时间、金额等关键数字要保留。
 
@@ -42,20 +61,31 @@ const SYSTEM_PROMPT = `⚠️ 重要指令: 你必须只使用简体中文输出
 - 严格返回 JSON，不要 markdown 代码块。
 - "highlights" 放匹配用户兴趣的内容，"other" 放所有不匹配的内容（必须包含邮件中除 highlights 以外的全部新闻）。
 - 没有匹配的内容时 highlights 为空数组，"other" 包含全部新闻。
+- "other" 中的每条新闻必须独立列出，禁止使用"等等"、"及其他"、"等"来省略条目。每条新闻都要有自己的 title 和 oneLiner，方便逐条点击跳转。
 - 每项必须是对象，包含如下字段。
 - 如果邮件只有1-2条主要内容，highlights和other加起来不要超过6条。
 - 同类或重复内容合并为一条，不要拆分。
 - 如果邮件原文中某条新闻有对应的链接地址，请在 "url" 字段中提供完整URL。
 
+JSON 字段说明:
+- title: 新闻标题 (必填)
+- summary: 匹配兴趣的新闻用此字段写摘要 (highlights 中使用)
+- oneLiner: 不匹配兴趣的新闻用此字段写一句话 (other 中使用)
+- matchedInterest: 匹配到的兴趣标签名 (仅 highlights 使用)
+- url: 原文链接，没有则为空字符串
+- status: 活动状态，取值为 "已结束" / "进行中" / "即将截止" / "" (没有时间性的留空)
+- deadline: 报名/活动截止日期，格式如"6月15日"，没有则为空字符串
+- location: 活动地点，没有则为空字符串
+
 JSON 示例:
 {
   "highlights": [
-    { "title": "奖学金申请", "summary": "下周三截止，需提交成绩单和推荐信", "matchedInterest": "奖学金", "url": "https://..." }
+    { "title": "奖学金申请", "summary": "截止: 6月20日，需提交成绩单和推荐信【即将截止】", "matchedInterest": "奖学金", "url": "https://...", "status": "即将截止", "deadline": "6月20日", "location": "" }
   ],
   "other": [
-    { "title": "图书馆", "oneLiner": "周末闭馆两天", "url": "" }
+    { "title": "图书馆闭馆", "oneLiner": "6月15日-16日闭馆，地点: 主图书馆", "url": "https://...", "status": "", "deadline": "", "location": "主图书馆" }
   ]
-}`;
+}``;
 
 // ========== 初始化 ==========
 (function init() {
@@ -81,10 +111,14 @@ function listenForStorageChanges() {
     if (changes.api_endpoint) STATE.apiEndpoint = changes.api_endpoint.newValue || DEFAULTS.API_ENDPOINT;
     if (changes.interests) {
       STATE.interests = changes.interests.newValue || DEFAULTS.INTERESTS;
-      // 兴趣标签变更 → 自动重新分析
-      if (STATE.panelOpen && STATE.currentEmailContent && !STATE.loading) {
+      // 兴趣标签变更
+      if (!STATE.loading && detectEmailOpen()) {
         console.log('[智能邮件助手] 兴趣标签已变更，自动刷新');
-        analyze();
+        STATE.lastResult = null;
+        STATE.currentEmailContent = null;
+        if (STATE.panelOpen) {
+          analyze();
+        }
         return;
       }
     }
@@ -391,6 +425,9 @@ function normalizeAIResult(parsed, rawContent) {
       oneLiner: item.oneLiner || item.OneLiner || item.one_liner || item.概括 || item['一行概括'] || item.description || '',
       matchedInterest: item.matchedInterest || item.MatchedInterest || item.兴趣 || item['匹配兴趣'] || item.interest || '',
       url: item.url || item.Url || item.URL || item.链接 || item['链接'] || '',
+      status: item.status || item.Status || item.状态 || item['状态'] || '',
+      deadline: item.deadline || item.Deadline || item.截止 || item['截止'] || item.截止日期 || item['截止日期'] || '',
+      location: item.location || item.Location || item.地点 || item['地点'] || item.位置 || item['位置'] || item.venue || '',
     };
   };
 
@@ -511,6 +548,10 @@ function renderResult(result) {
   } else {
     highlights.forEach(item => {
       const hasUrl = !!(item.url && item.url.trim());
+      // 状态徽章
+      const statusBadge = item.status
+        ? `<span class="ai-status-badge ai-status-${esc(item.status)}">${esc(item.status)}</span>`
+        : '';
       html += `<div class="ai-highlight-card">`;
       if (item.title) {
         html += `<div class="ai-card-title">`;
@@ -519,9 +560,17 @@ function renderResult(result) {
         } else {
           html += esc(item.title);
         }
+        html += statusBadge;
         html += `</div>`;
       }
       html += `<div class="ai-card-summary">${esc(item.summary || item.oneLiner || '')}</div>`;
+      // 额外信息行
+      if (item.deadline || item.location) {
+        html += '<div class="ai-card-meta">';
+        if (item.deadline) html += `<span class="ai-meta-item">⏰ ${esc(item.deadline)}</span>`;
+        if (item.location) html += `<span class="ai-meta-item">📍 ${esc(item.location)}</span>`;
+        html += '</div>';
+      }
       if (item.matchedInterest) {
         html += `<span class="ai-card-tag">🏷️ ${esc(item.matchedInterest)}</span>`;
       }
@@ -575,7 +624,11 @@ function copyResult() {
   const { highlights, other } = STATE.lastResult;
   let text = '📧 智能邮件摘要\n' + '='.repeat(30) + '\n\n⭐ 我想看的\n';
   highlights.forEach((h, i) => {
-    text += `${i + 1}. ${h.title || ''}\n   ${h.summary || ''}\n`;
+    text += `${i + 1}. ${h.title || ''}`;
+    if (h.status) text += ` [${h.status}]`;
+    text += `\n   ${h.summary || ''}\n`;
+    if (h.deadline) text += `   ⏰ ${h.deadline}\n`;
+    if (h.location) text += `   📍 ${h.location}\n`;
     if (h.matchedInterest) text += `   🏷️ ${h.matchedInterest}\n`;
     if (h.url) text += `   🔗 ${h.url}\n`;
   });
