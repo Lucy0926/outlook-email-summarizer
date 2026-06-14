@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能邮件助手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <header class="header">
+      <h1>📧 智能邮件助手</h1>
+      <span class="version">v1.0</span>
+    </header>
+
+    <section class="section">
+      <label class="label" for="api-key">🔑 DeepSeek API Key</label>
+      <input
+        type="password"
+        id="api-key"
+        class="input"
+        placeholder="sk-..."
+        autocomplete="off"
+      />
+      <div class="hint">密钥仅保存在本地浏览器</div>
+    </section>
+
+    <section class="section">
+      <label class="label" for="api-endpoint">🌐 API 端点</label>
+      <input
+        type="text"
+        id="api-endpoint"
+        class="input"
+        placeholder="https://api.deepseek.com/v1/chat/completions"
+      />
+    </section>
+
+    <section class="section">
+      <label class="label">🏷️ 我的兴趣标签</label>
+      <div id="interests-container" class="chips-container"></div>
+      <div class="add-tag-row">
+        <input
+          type="text"
+          id="new-tag-input"
+          class="input"
+          placeholder="输入标签后按回车..."
+          maxlength="20"
+        />
+        <button id="btn-add-tag" class="btn-add">+</button>
+      </div>
+      <div class="suggested">
+        <span class="hint">推荐：</span>
+        <div id="suggested-tags"></div>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="btn-save" class="btn-primary">💾 保存设置</button>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

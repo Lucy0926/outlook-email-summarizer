@@ -1,0 +1,204 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 360px;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: #1b1b1b;
+  background: #fff;
+}
+
+.popup {
+  padding: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid #0078d4;
+}
+
+.header h1 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.version {
+  font-size: 11px;
+  color: #888;
+}
+
+.section {
+  margin-bottom: 14px;
+}
+
+.label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.input {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #c8c8c8;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input:focus {
+  border-color: #0078d4;
+  box-shadow: 0 0 0 2px rgba(0,120,212,0.1);
+}
+
+.hint {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+}
+
+/* Chips */
+.chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 24px;
+  margin-bottom: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #f0f6ff;
+  color: #0078d4;
+  border: 1px solid #cce0ff;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.chip .chip-remove {
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 14px;
+  line-height: 1;
+}
+.chip .chip-remove:hover {
+  opacity: 1;
+  color: #c50f1f;
+}
+
+.add-tag-row {
+  display: flex;
+  gap: 6px;
+}
+
+.add-tag-row .input {
+  flex: 1;
+}
+
+.btn-add {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #c8c8c8;
+  background: #f8f8f8;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  color: #0078d4;
+}
+.btn-add:hover {
+  background: #e6f0ff;
+}
+
+.suggested {
+  margin-top: 6px;
+}
+
+#suggested-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.tag-suggest {
+  padding: 2px 8px;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 11px;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.15s;
+}
+
+.tag-suggest:hover {
+  background: #e6f0ff;
+  border-color: #cce0ff;
+  color: #0078d4;
+}
+
+.tag-suggest.used {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* Buttons */
+.actions {
+  margin-top: 16px;
+}
+
+.btn-primary {
+  width: 100%;
+  padding: 10px;
+  background: #0078d4;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.btn-primary:hover {
+  background: #106ebe;
+}
+
+.btn-primary:active {
+  background: #005a9e;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  background: #1b1b1b;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.hidden {
+  opacity: 0;
+}

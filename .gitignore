@@ -1,0 +1,26 @@
+# 依赖
+node_modules/
+
+# 构建输出
+dist/
+
+# Office Add-in 遗留（已弃用，extension/ 才是当前版本）
+src/
+manifest*.xml
+webpack.config.js
+generate-icons.js
+package.json
+package-lock.json
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# 压缩包
+*.zip
+*.rar
