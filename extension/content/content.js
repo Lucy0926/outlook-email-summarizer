@@ -430,7 +430,7 @@ async function callAI(emailContent, links) {
           { role: 'user', content: userMessage },
         ],
         temperature: 0,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
       signal: controller.signal,
     });
@@ -455,6 +455,12 @@ function parseAIResponse(data) {
   try {
     const content = data.choices?.[0]?.message?.content;
     if (!content) throw new Error('AI 返回内容为空');
+
+    // 检测是否因 token 不足被截断
+    const finishReason = data.choices?.[0]?.finish_reason;
+    if (finishReason === 'length') {
+      console.warn('[AI] 警告: 响应因 token 不足被截断，结果可能不完整');
+    }
 
     let json = content.trim();
 
@@ -481,7 +487,9 @@ function parseAIResponse(data) {
     console.error('[AI] JSON 解析失败，原始内容:', data);
     // 保存原始内容供调试
     const rawContent = data.choices?.[0]?.message?.content || '';
-    throw new Error('AI 返回格式异常: ' + (error.message || '').substring(0, 50) +
+    const wasTruncated = data.choices?.[0]?.finish_reason === 'length';
+    const hint = wasTruncated ? ' (可能因输出过长被截断，已自动扩大 token 限制)' : '';
+    throw new Error('AI 返回格式异常: ' + (error.message || '').substring(0, 50) + hint +
       '\n原始内容已保存到调试面板');
   }
 }
